@@ -1,0 +1,30 @@
+function del(id){if(confirm('Delete this entry?')){S.e=S.e.filter(e=>e.id!==id);save();render()}}
+function addT(){const v=$('#t_v').value;if(v==='')return;const n=new Date();S.t.push({at:today()+' '+n.toTimeString().slice(0,5),unit:$('#t_u').value||'Cold store',temp:num(v)});save();render()}
+
+function more(){return `<div class="card"><h2>Export and backup</h2>
+<button class="btn alt" onclick="xl()">Download Excel report</button><button class="btn alt" onclick="bk()">Download backup</button>
+<label style="margin-top:14px">Restore from backup file<input type="file" accept=".json" onchange="rs(this)"></label>
+<p class="mut">Data is stored on this device only. Download a backup regularly.</p></div>`}
+function setS(){S.set.portions=num($('#s_p').value)||3000;S.set.base=num($('#s_b').value);save();alert('Settings saved.');render()}
+function xl(){if(!window.XLSX){alert('Excel library did not load. Check the internet connection.');return}
+const wb=XLSX.utils.book_new();
+Object.keys(C).forEach(c=>{const cf=C[c],rows=S.e.filter(e=>e.cat===c&&e.date.slice(0,7)===mon).map(e=>{const r={Date:e.date,Item:e.item,Unit:e.unit,'Rate ₹':e.rate};Object.keys(cf.f).forEach(k=>r[cf.f[k]]=num(e[k]));if(c!=='cook')r['Closing stock']=close(e);r.Reason=e.reason;if(cf.ex)r.Expiry=e.exp;r['Loss ₹']=wv(e);return r});
+XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows.length?rows:[{Note:'No entries'}]),cf.n.slice(0,30).replace('&','and'))});
+XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.f.filter(e=>e.date.slice(0,7)===mon).map(e=>({Date:e.date,Fuel:e.type,Unit:e.unit,Opening:e.open,Purchased:e.buy,Consumed:e.use,'Closing stock':e.type.startsWith('Electricity')?'':num(e.open)+num(e.buy)-num(e.use),'Rate ₹':e.rate,'Cost ₹':num(e.use)*num(e.rate),'Used for':e.for,Note:e.note})).concat([]).length?S.f.filter(e=>e.date.slice(0,7)===mon).map(e=>({Date:e.date,Fuel:e.type,Unit:e.unit,Opening:e.open,Purchased:e.buy,Consumed:e.use,'Closing stock':e.type.startsWith('Electricity')?'':num(e.open)+num(e.buy)-num(e.use),'Rate ₹':e.rate,'Cost ₹':num(e.use)*num(e.rate),'Used for':e.for,Note:e.note})):[{Note:'No entries'}]),'Fuel and Gas');
+{const Y=S.yl.filter(e=>e.date.slice(0,7)===mon).sort((a,b)=>a.date<b.date?-1:1),t=ylTot(Y);
+const rows=Y.map(e=>({'Date':e.date,'Shift':e.shift,'Menu Item':e.item,'Raw Material Issued (Kg/L)':num(e.iss),'Standard Expected Portions':num(e.exp),'Actual Portions Produced':num(e.prod),'Portions Dispatched / Served':num(e.served),'Leftover / Unserved Portions':num(e.left),'Plate / Kitchen Wastage (Kg)':num(e.waste),'Unaccounted Variance (Portions)':yun(e),'Variance %':num(e.exp)?yun(e)/num(e.exp):0,'Production Lead Sign-Off':e.ps,'Dispatch Lead Sign-Off':e.ds,'Root Cause / Remarks':e.note||''}));
+if(rows.length)rows.push({'Date':'TOTAL / SUMMARY','Raw Material Issued (Kg/L)':t.iss,'Standard Expected Portions':t.exp,'Actual Portions Produced':t.prod,'Portions Dispatched / Served':t.served,'Leftover / Unserved Portions':t.left,'Plate / Kitchen Wastage (Kg)':+t.waste.toFixed(2),'Unaccounted Variance (Portions)':t.un,'Variance %':t.exp?t.un/t.exp:0});
+const ws=XLSX.utils.json_to_sheet(rows.length?rows:[{Note:'No entries'}]);rows.forEach((_,i)=>{const c=ws['K'+(i+2)];if(c)c.z='0.00%'});XLSX.utils.book_append_sheet(wb,ws,'Kitchen Yield Log')}
+if(adm){const f=fin(mon),sh=a=>XLSX.utils.json_to_sheet(a.length?a:[{Note:'No entries'}]),im=x=>x.date.slice(0,7)===mon;
+XLSX.utils.book_append_sheet(wb,sh(S.rev.filter(im).map(x=>({Date:x.date,Outlet:x.outlet,Mode:x.mode,'Amount ₹':num(x.amt)}))),'Revenue');
+XLSX.utils.book_append_sheet(wb,sh(S.exp.filter(im).map(x=>({Date:x.date,Category:x.cat,Description:x.desc,Mode:x.mode,'Amount ₹':num(x.amt)}))),'Other expenses');
+XLSX.utils.book_append_sheet(wb,sh(f.pl),'P and L');}
+if(adm){const ab=S.sal.abs[mon]||{},d=dimOf(mon);XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.sal.staff.length?S.sal.staff.map(m=>{const a=num(ab[m.id]),dd=num(m.salary)/d*a;return{Name:m.name,Type:m.type||'Regular staff',Designation:m.role,'Monthly salary ₹':num(m.salary),'Absent days':a,'Deduction ₹':Math.round(dd),'Net pay ₹':Math.round(num(m.salary)-dd)}}):[{Note:'No staff'}]),'Staff Salary')}
+XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.t.length?S.t:[{Note:'No readings'}]),'Cold storage');
+XLSX.writeFile(wb,'Food_Waste_Report_'+mon+'.xlsx')}
+function bk(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='food_waste_backup_'+today()+'.json';a.click()}
+function rs(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const x=JSON.parse(r.result);if(!x.e)throw 0;if(confirm('Replace current data with this backup?')){S=x;save();render()}}catch(z){alert('This file is not a valid backup.')}};r.readAsText(f)}
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(x){}
+render();
+</script></body>
+</html>
